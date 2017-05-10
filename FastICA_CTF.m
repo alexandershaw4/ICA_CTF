@@ -19,7 +19,9 @@ review_topo = 1;
 plotcor     = 0;
 
 % Paths
-addpath('/home/as08/Downloads/FastICA_25/'); 
+addpath('/home/sapas10/spm12/'); 
+addpath('/home/sapas10/FastICA_25/');
+addpath('/home/sapas10/fieldtrip-20170509/');
 if ~exist('fasticag'); getfastica;    end
 
 D      = readCTFds(Dname);
