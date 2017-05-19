@@ -76,6 +76,16 @@ onset   = str2num(D.hist(o2+11:o2+16));
 [o1,o2] = eval(T{2});
 offset  = str2num(D.hist(o2+9:o2+13));
 t       = onset:(1/D.res4.sample_rate):offset;
+
+if isempty(t) % resting
+    NS = D.res4.no_samples;
+    SR = D.res4.sample_rate;
+    NT = D.res4.no_trials;
+    onset  = 0;
+    offset = NS/SR;
+    t = linspace(onset,offset,NS);
+end
+
 fprintf('Using trial times %d to %d (@ sr %d Hz)\n',onset,offset,D.res4.sample_rate);
 
 % sort num trials to concat
