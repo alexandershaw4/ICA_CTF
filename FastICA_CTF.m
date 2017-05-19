@@ -31,9 +31,10 @@ chans  = cellstr(D.res4.chanNames);
 MEGid  = cat(1,D.res4.senres.sensorTypeIndex);
 MEGid  = find(MEGid==5);
 
-for i = 1:length(Periph)
-    if ~ any(any(Data(:,Periph(i),:))); Periph(i) = []; end
-end
+% No need as doing PCA anyway
+% for i = 1:length(Periph)
+%     if ~ any(any(Data(:,Periph(i),:))); Periph(i) = []; end
+% end
 
 % Remove periph from data matrix
 ii   = find(~ismember(1:size(Data,2),Periph));
@@ -77,7 +78,8 @@ onset   = str2num(D.hist(o2+11:o2+16));
 offset  = str2num(D.hist(o2+9:o2+13));
 t       = onset:(1/D.res4.sample_rate):offset;
 
-if isempty(t) % resting
+% If resting data
+if isempty(t) 
     NS = D.res4.no_samples;
     SR = D.res4.sample_rate;
     NT = D.res4.no_trials;
@@ -97,6 +99,7 @@ win   = 1;
 Data = permute(Data,[2 1 3]);
 E    = permute(E,[2 1 3]);
 
+% Make windows
 for t = 1:nc
     thewin{t} = [win:win+tocat-1];
     win       = win + tocat;
@@ -140,7 +143,7 @@ for t = 1:nc
         c = C  (i,:);
         
         try
-            [Q,p] = corr(c', e');
+            [Q,p] = corr(c(:), e(:));
             
             if any(p < thrp)
                 fprintf('found peripherally correlated component: %d ... \n',i);
@@ -254,7 +257,9 @@ Orig(:,MEGid,:) = Data(:,:,1:size(Orig,3));
 % writeCTFds
 [fp,fn,fe] = fileparts(Dname);
 if isempty(fp); fp = evalinContext('pwd'); end
-fname = [fp '/' fname];
+newname = [Dname(1:end-3) fname];
+cd(fp);
+fname = [newname];
 writeCTFds(fname,D,Orig);
 
 
