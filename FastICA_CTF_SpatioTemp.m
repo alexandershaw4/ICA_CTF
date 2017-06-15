@@ -12,7 +12,7 @@ plot_change = 0;
 % Paths
 addpath('/home/sapas10/spm12/'); 
 addpath('/home/sapas10/FastICA_25/');
-addpath('/home/sapas10/fieldtrip-20170509/');
+%addpath('/home/sapas10/fieldtrip-20170509/');
 if ~exist('fasticag'); getfastica;    end
 
 % read ctf
@@ -144,9 +144,8 @@ for t = 1:nt
         end
 
         % reduce dims of peripheral channels
-        [junk,ncomp] = PEig90(e);
-        e            = PEig(e',1:ncomp);
-        fprintf('Reduced dimensionality of regressor matrix to %d\n',ncomp);
+        fprintf('Taking prinipcal component from peripheral channel matrix\n');
+        e = PEig(e');
 
         % the ica
         if nargin < 2 || isempty(NC)
@@ -171,13 +170,12 @@ for t = 1:nt
 
         try  p_temp; catch p_temp = []; end
         if   isempty(p_temp); continue;
-        else fprintf('Found %d temporally correlated components...\n',length(find(sum(logical(p_temp),2))));
+        else fprintf('Found %d temporally correlated components...\n',length(find(p_temp)));
              fprintf('Constructing topographies from these components...\n');  
         end
 
         % only include as bad if all periph ncomp correlate 
-        tmp = sum(logical(p_temp),2);
-        tmp = find(tmp==ncomp);
+        tmp = find(p_temp);
         iW  = pinv(W);
 
         % make topographies for these
