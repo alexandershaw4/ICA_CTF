@@ -136,7 +136,8 @@ for t = 1:nt
         % bandpass filter
         fprintf('Bandpass filtering\n');
         cD = bandpassfilter(cD,SR,[1 100]);
-
+        e  = bandpassfilter(e ,SR,[1 20]);
+        
         % Sort regressors
         for ej = 1:size(e,1)
             e(ej,:) = HighResMeanFilt(e(ej,:),1,16);
@@ -263,7 +264,8 @@ for t = 1:nt
             subplot(221),imagesc(cD);
             subplot(222),imagesc(this);
             subplot(2,2,[3 4]), plot(time,this);hold on;
-            plot(time,e*100,'r','LineWidth',3);hold off
+            eplot = TSNorm(e,5)*max(this(:));
+            plot(time,eplot,'r','LineWidth',3);hold off
             drawnow;
         end
         if t > 50;
