@@ -186,8 +186,7 @@ for t = 1:nt
             end
         end
         
-        % find temporal correlates between ICs and EOG
-        %----------------------------------------------
+        % find temporal correlates between I
         for i = 1:size(C,1)        
             c = C  (i,:);
             try
@@ -207,7 +206,7 @@ for t = 1:nt
              fprintf('Constructing topographies from these components...\n');  
         end
 
-        % corrlated component indices
+        % only include as bad if all periph ncomp correlate 
         tmp = find(p_temp);
         iW  = pinv(W);
 
