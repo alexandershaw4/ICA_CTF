@@ -3,7 +3,7 @@ function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf)
 %
 %
 %
-% AS
+%
 
 
 review_topo = 0; 
@@ -16,6 +16,7 @@ addpath('/home/sapas10/FastICA_25/');
 if ~exist('fasticag'); getfastica;    end
 
 % read ctf
+fprintf('Processing dataset: %s\n',Dname);
 D      = readCTFds(Dname);
 Data   = getCTFdata(D);
 Periph = strmatch('EEG', D.res4.chanNames);
@@ -87,8 +88,8 @@ BAD  = zeros(1,nt);
 thr_chan = 3*squeeze(std(Data,[],3)); % std over trials (chans * samps)
 thr_samp = 3*squeeze(std(Data,[],2)); % std over samples (chans * trials)
 
-samp_thr = 1/8; % proportion of noisy* samples for trial rejection
-chan_thr = 1/8; % proportion of channels to simultaneously have noise*
+samp_thr = 1/4; % proportion of noisy* samples for trial rejection
+chan_thr = 1/6; % proportion of channels to simultaneously have noise*
                 % *Noise as defined by thr_chan & thr_samp
 
 
@@ -108,21 +109,21 @@ for t = 1:nt
     noise  = cD > thr_chan;
     for ch = 1:size(cD,1) 
         if sum(noise(ch,:)) > round(NS*samp_thr); 
-            fprintf('Rejecting trial %d\n',t);pause(1);
+            fprintf('Rejecting trial %d on channel noise (samp std over trials)\n',t);
             BAD(t) = 1; 
             break;continue
         end
     end
     for ch = 1:size(cD,2)
         if sum(noise(:,ch)) > round(size(MEGid,1)*chan_thr);
-            fprintf('Rejecting trial %d\n',t);pause(1);
+            fprintf('Rejecting trial %d on channel noise (chan std over samples)\n',t);
             BAD(t) = 1;
             break;continue
         end
     end
     for ch = 1:NS
-        if noise(:,ch) > (PEig(thr_samp)/NS);
-            fprintf('Rejecting trial %d\n',t);pause(1);
+        if noise(:,ch) > (mean(thr_samp,2)/NS);
+            fprintf('Rejecting trial %d on sample noise (std per chan over trials)\n',t);
             BAD(t) = 1;
             break;continue;
         end
@@ -137,7 +138,7 @@ for t = 1:nt
         fprintf('Bandpass filtering\n');
         cD = bandpassfilter(cD,SR,[1 100]);
         e  = bandpassfilter(e ,SR,[1 20]);
-        
+
         % Sort regressors
         for ej = 1:size(e,1)
             e(ej,:) = HighResMeanFilt(e(ej,:),1,16);
@@ -148,19 +149,30 @@ for t = 1:nt
         e = PEig(e');
 
         % the ica
-        if nargin < 2 || isempty(NC)
-             [C , A , W]  = fastica(cD,'verbose','off');
-        else [C , A , W]  = fastica(cD,'numOfIC',NC,'verbose','off');
-        end    
+        try
+            if nargin < 2 || isempty(NC)
+                 [C , A , W]  = fastica(cD,'verbose','off');
+            else [C , A , W]  = fastica(cD,'numOfIC',NC,'verbose','off');
+            end  
+        catch
+            fprintf('Could not compute ICA: skipping this trial...\n\n');
+            continue;
+        end
 
+%         % despike C
+%         fprintf('Despiking components\n');
+%         for sp = 1:size(C,1)
+%             dC(sp,:) = reducepeaks(C(sp,:));
+%         end
+        
+        
         % temporal correlates
         for i = 1:size(C,1)        
             c = C  (i,:);
-
             try
-                [Q,p] = corr(c(:), e');
+                [Q,p] = corr(c(:), e(:));
                 if any(p < thrp)
-                    p_temp(i,:) = (p);
+                    p_temp(i) = (p);
                 end
             catch
                 fprintf('Could not run correlations for component %d\n',i);
@@ -179,12 +191,13 @@ for t = 1:nt
         iW  = pinv(W);
 
         % make topographies for these
-        TOPOi = iW*0;
+        TOPOi        = iW*0;
         TOPOi(tmp,:) = iW(tmp,:); 
-        TOPO = (C'*TOPOi')';      % project spatial portion of these comps
-        topo = spm_robust_average(TOPO,2);
+        % project spatial portion of these comps
+        TOPO         = (C'*TOPOi')'; 
+        topo         = spm_robust_average(TOPO,2);
 
-        % correlate this trial-specific topo with all mixing matrix
+        % correlate this trial-specific topo with mixing matrix
         [Q,ps] = corr(iW,topo);
         p_spat = find(ps<thrp);
 
@@ -255,7 +268,10 @@ for t = 1:nt
             Data(:,:,t) = this;
         end
 
-
+        if t > 50
+            % debugging breakpoint
+            %disp('test');
+        end
 
 
         if plot_change
@@ -265,9 +281,6 @@ for t = 1:nt
             eplot = TSNorm(e,5)*max(this(:));
             plot(time,eplot,'r','LineWidth',3);hold off
             drawnow;
-        end
-        if t > 50;
-            disp('rest');
         end
     
     end
@@ -286,9 +299,11 @@ Orig(:,MEGid,:) = Data(:,:,1:size(Orig,3));
 % writeCTFds
 [fp,fn,fe] = fileparts(Dname);
 if isempty(fp); fp = evalinContext('pwd'); end
-newname = [Dname(1:end-3) fname];
+
+%newname = [Dname(1:end-3) fname];
 cd(fp);
-fname = [newname];
+%fname = [newname];
+fname = [fn fname];
 writeCTFds([fp '/' fname fe],D,Orig);
 
 % write bad trials
