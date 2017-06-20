@@ -154,35 +154,13 @@ for t = 1:nt
     
     %thresh check trial first
     %--------------------------
-    BAD(t) = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,t,1);
+    [BAD(t),STR] = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,t,1);
     
+    if BAD(t);
+        fprintf(loc,STR);
+    end
     
-%     % threshold check first, just reject trial
-%     %-----------------------------------------
-%     noise  = cD > thr_chan;
-%     for ch = 1:size(cD,1) 
-%         if sum(noise(ch,:)) > round(NS*samp_thr); 
-%             fprintf('Rejecting trial %d on channel noise (samp std over trials)\n',t);
-%             BAD(t) = 1; 
-%             break;continue
-%         end
-%     end
-%     for ch = 1:size(cD,2)
-%         if sum(noise(:,ch)) > round(size(MEGid,1)*chan_thr);
-%             fprintf('Rejecting trial %d on channel noise (chan std over samples)\n',t);
-%             BAD(t) = 1;
-%             break;continue
-%         end
-%     end
-%     for ch = 1:NS
-%         if noise(:,ch) > (mean(thr_samp,2)/NS);
-%             fprintf('Rejecting trial %d on sample noise (std per chan over trials)\n',t);
-%             BAD(t) = 1;
-%             break;continue;
-%         end
-%     end
-        
-    
+   
     % do the ica if trial not bad
     %-----------------------------
     if ~BAD(t)
@@ -394,30 +372,30 @@ addpath('FastICA-master');
 end
 
 
-function [BAD] = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,t,v)
-persistent loc;
+function [BAD,STR] = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,t,v)
 
     % threshold check first, just reject trial
     %-----------------------------------------
     BAD = 0;
+    STR = [];
     noise  = cD > thr_chan;
     for ch = 1:size(cD,1) 
         if sum(noise(ch,:)) > round(NS*samp_thr); 
-            if v; fprintf(loc,'Rejecting trial %d on channel noise (samp std over trials)\n',t);end
+            if v; STR=sprintf('Rejecting trial %d on channel noise (samp std over trials)\n',t);end
             BAD = 1; 
             return;%break;continue
         end
     end
     for ch = 1:size(cD,2)
         if sum(noise(:,ch)) > round(size(MEGid,1)*chan_thr);
-            if v; fprintf(loc,'Rejecting trial %d on channel noise (chan std over samples)\n',t);end
+            if v; STR=sprintf('Rejecting trial %d on channel noise (chan std over samples)\n',t);end
             BAD = 1;
             return;%break;continue
         end
     end
     for ch = 1:NS
         if noise(:,ch) > (mean(thr_samp,2)/NS);
-            if v; fprintf(loc,'Rejecting trial %d on sample noise (std per chan over trials)\n',t);end
+            if v; STR=sprintf('Rejecting trial %d on sample noise (std per chan over trials)\n',t);end
             BAD = 1;
             return;%break;continue;
         end
