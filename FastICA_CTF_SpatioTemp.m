@@ -1,4 +1,4 @@
-function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf)
+function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog)
 % FastICA for CTF MEG dataset
 %
 % Thresholds each trial of epoched data, checking that no value exceeds
@@ -31,14 +31,17 @@ function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf)
 %         UL    = upper limit on number of comps to reject (optional)
 %         fname = output dataset appendix, e.g. 'ICA' for MEG_Cut_ICA.ds
 %         bonf  = flag for bonferonni correction (def 0)
+%         
+%         writelog = flag (0/1) to write to console (default) or a logfile
 %
 % Dependencies: (matlab) 
 %   - fieldtrip (for ft_topoplotter)
-%   - spm (for spm_vec & spm_robust_average)
+%   - spm (for spm_vec & spm_robust_average) [included]
 %   - fastica algorithm
 %   - the other tools in this github package
 %
 % AS2017
+
 
 review_topo = 0; 
 plot_change = 0;
@@ -46,10 +49,21 @@ plot_change = 0;
 % Paths
 addpath('/home/sapas10/spm12/'); 
 addpath('/home/sapas10/FastICA_25/');
+%addpath('/home/sapas10/fieldtrip-20170509/');
 if ~exist('fasticag'); getfastica;    end
 
+% write log, or to screen
+persistent loc;
+if nargin < 6; writelog = 0; end
+if writelog;
+    [fp,fn,ne] = fileparts(Dname);
+    loc        = fopen([fn '.txt'],'w');
+else
+    loc = 1;
+end
+
 % read ctf
-fprintf('Processing dataset: %s\n',Dname);
+fprintf(loc,'Processing dataset: %s\n',Dname);
 D      = readCTFds(Dname);
 Data   = getCTFdata(D);
 Periph = strmatch('EEG', D.res4.chanNames);
@@ -79,14 +93,15 @@ if nargin == 5 && isempty(NC)
 end
 
 % Bonferroni or not
-if nargin < 5
+if nargin < 5; bonf = 0; end
+if ~bonf
      thrp = .05;
-     fprintf('Not Bonferroni correcting...\n');
+     fprintf(loc,'Not Bonferroni correcting...\n');
 else thrp = .05 / NC;
-     fprintf('Bonferroni correcting...\n');
+     fprintf(loc,'Bonferroni correcting...\n');
 end
 
-% Read epoch info from .hist
+% Read epoch info from hist
 T{1} = [' regexp(D.hist, ''StartTime: *'', ''match'') '];
 T{2} = [' regexp(D.hist, ''EndTime: *'', ''match'') '];
 
@@ -96,7 +111,7 @@ onset   = str2num(D.hist(o2+11:o2+16));
 [o1,o2] = eval(T{2});
 offset  = str2num(D.hist(o2+9:o2+13));
 t       = onset:(1/D.res4.sample_rate):offset;
-time    = t(2:end);
+time = t(2:end);
 
 if isempty(t) % resting
     NS = D.res4.no_samples;
@@ -108,7 +123,7 @@ if isempty(t) % resting
     time = t;
 end
    
-fprintf('Using trial times %d to %d (@ sr %d Hz)\n',onset,offset,D.res4.sample_rate);
+fprintf(loc,'Using trial times %d to %d (@ sr %d Hz)\n',onset,offset,D.res4.sample_rate);
 
 
 % Permute so dim1 = channels
@@ -131,48 +146,74 @@ chan_thr = 1/7; % proportion of channels to simultaneously have noise*
 for t = 1:nt
     clear p_temp p Q
     
-    fprintf('\n\nAnalysing trial %d of %d\n',t,nt);
+    fprintf(loc,'\n\nAnalysing trial %d of %d\n',t,nt);
     
     cD  = squeeze(Data(:,:,t)); 
     e   = E(:,:,t);
     
-    % thresh check trial first (subfunc for repeated calls)
-    %------------------------------------------------------
+    %thresh check trial first
+    %--------------------------
     BAD(t) = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,t,1);
     
+    
+%     % threshold check first, just reject trial
+%     %-----------------------------------------
+%     noise  = cD > thr_chan;
+%     for ch = 1:size(cD,1) 
+%         if sum(noise(ch,:)) > round(NS*samp_thr); 
+%             fprintf('Rejecting trial %d on channel noise (samp std over trials)\n',t);
+%             BAD(t) = 1; 
+%             break;continue
+%         end
+%     end
+%     for ch = 1:size(cD,2)
+%         if sum(noise(:,ch)) > round(size(MEGid,1)*chan_thr);
+%             fprintf('Rejecting trial %d on channel noise (chan std over samples)\n',t);
+%             BAD(t) = 1;
+%             break;continue
+%         end
+%     end
+%     for ch = 1:NS
+%         if noise(:,ch) > (mean(thr_samp,2)/NS);
+%             fprintf('Rejecting trial %d on sample noise (std per chan over trials)\n',t);
+%             BAD(t) = 1;
+%             break;continue;
+%         end
+%     end
+        
     
     % do the ica if trial not bad
     %-----------------------------
     if ~BAD(t)
     
         % bandpass filter
-        fprintf('Bandpass filtering\n');
+        fprintf(loc,'Bandpass filtering\n');
         cD = bandpassfilter(cD,SR,[1 100]);
         e  = bandpassfilter(e ,SR,[1 20]);
 
-        % mean window filter regressors (prob unnecessary given PCA)
+        % Sort regressors
         for ej = 1:size(e,1)
             e(ej,:) = HighResMeanFilt(e(ej,:),1,16);
         end
 
-        % reduce dims of peripheral channels (e.g. vert & horz eog)
-        fprintf('Taking prinipcal component from peripheral channel matrix\n');
+        % reduce dims of peripheral channels
+        fprintf(loc,'Taking prinipcal component from peripheral channel matrix\n');
         e = PEig(e');
 
-        % do the ica
+        % the ica
         try
-            fprintf('Trying ICA..........\n');
+            fprintf(loc,'Trying ICA..........\n');
             if nargin < 2 || isempty(NC)
                  [C , A , W]  = fastica(cD,'verbose','off');
             else [C , A , W]  = fastica(cD,'numOfIC',NC,'verbose','off');
             end  
         catch
-            fprintf('Could not compute ICA: skipping this trial...\n\n');
+            fprintf(loc,'Could not compute ICA: skipping this trial...\n\n');
             BAD(t) = 1;
             continue;
         end
         
-        % Do the same thresholding on each component as on real trial
+        % do same thresholding on each component
         for ch = 1:size(C,1)
             iw = pinv(W);
             xx = C(ch,:);
@@ -181,13 +222,13 @@ for t = 1:nt
             bad_comp = threshold(thiscomp,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,ch,0);
             
             if bad_comp
-                fprintf('Rejecting component %d based on noise\n',ch);
+                fprintf(loc,'Rejecting component %d based on noise\n',ch);
                 C(ch,:) = 0;
             end
         end
         
-        % find temporal correlates between ICs and EOG
-        %----------------------------------------------
+
+        % temporal correlates
         for i = 1:size(C,1)        
             c = C  (i,:);
             try
@@ -196,25 +237,24 @@ for t = 1:nt
                     p_temp(i) = (p);
                 end
             catch
-                fprintf('Could not run correlations for component %d\n',i);
+                fprintf(loc,'Could not run correlations for component %d\n',i);
                 p = [];
             end
         end  
 
         try  p_temp; catch p_temp = []; end
         if   isempty(p_temp); continue;
-        else fprintf('Found %d temporally correlated components...\n',length(find(p_temp)));
-             fprintf('Constructing topographies from these components...\n');  
+        else fprintf(loc,'Found %d temporally correlated components...\n',length(find(p_temp)));
+             fprintf(loc,'Constructing topographies from these components...\n');  
         end
 
-        % corrlated component indices
+        % only include as bad if all periph ncomp correlate 
         tmp = find(p_temp);
         iW  = pinv(W);
 
         % make topographies for these
         TOPOi        = iW*0;
         TOPOi(:,tmp) = iW(:,tmp); 
-        
         % project spatial portion of these comps
         TOPO         = (C'*TOPOi')'; 
         topo         = spm_robust_average(TOPO,2);
@@ -228,7 +268,7 @@ for t = 1:nt
 
         % log num comps rejected per trial
         if   isempty(common); continue; 
-        else fprintf('A total of %d components correlate both temporally & spatially\n',length(common));
+        else fprintf(loc,'A total of %d components correlate both temporally & spatially\n',length(common));
         end
         try  AllGone(t,:) = length(common); end
 
@@ -289,7 +329,13 @@ for t = 1:nt
             this = ( C'*iW')';
             Data(:,:,t) = this;
         end
-        
+
+        if t > 50
+            % debugging breakpoint
+            %disp('test');
+        end
+
+
         if plot_change
             subplot(221),imagesc(cD);
             subplot(222),imagesc(this);
@@ -306,7 +352,7 @@ end
 % Put the dimensions back: ( samp * chan * trial)
 Data = permute(Data,[2 1 3]);
 
-fprintf('Removed an average of %i components per trial\n',round(mean(AllGone)));
+fprintf(loc,'Removed an average of %i components per trial\n',round(mean(AllGone)));
 
 
 % return
@@ -316,9 +362,16 @@ Orig(:,MEGid,:) = Data(:,:,1:size(Orig,3));
 [fp,fn,fe] = fileparts(Dname);
 if isempty(fp); fp = evalinContext('pwd'); end
 
+%newname = [Dname(1:end-3) fname];
 cd(fp);
+%fname = [newname];
 fname = [fn fname];
 writeCTFds([fp '/' fname fe],D,Orig);
+
+% close log
+if writelog;
+    fclose(loc);
+end
 
 % write bad trials
 ctf_write_BadTrials((find(BAD)),[fp '/' fname fe],t)
@@ -341,6 +394,7 @@ end
 
 
 function [BAD] = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,t,v)
+persistent loc;
 
     % threshold check first, just reject trial
     %-----------------------------------------
@@ -348,27 +402,26 @@ function [BAD] = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,t,v)
     noise  = cD > thr_chan;
     for ch = 1:size(cD,1) 
         if sum(noise(ch,:)) > round(NS*samp_thr); 
-            if v; fprintf('Rejecting trial %d on channel noise (samp std over trials)\n',t);end
+            if v; fprintf(loc,'Rejecting trial %d on channel noise (samp std over trials)\n',t);end
             BAD = 1; 
-            return;
+            return;%break;continue
         end
     end
     for ch = 1:size(cD,2)
         if sum(noise(:,ch)) > round(size(MEGid,1)*chan_thr);
-            if v; fprintf('Rejecting trial %d on channel noise (chan std over samples)\n',t);end
+            if v; fprintf(loc,'Rejecting trial %d on channel noise (chan std over samples)\n',t);end
             BAD = 1;
-            return;
+            return;%break;continue
         end
     end
     for ch = 1:NS
         if noise(:,ch) > (mean(thr_samp,2)/NS);
-            if v; fprintf('Rejecting trial %d on sample noise (std per chan over trials)\n',t);end
+            if v; fprintf(loc,'Rejecting trial %d on sample noise (std per chan over trials)\n',t);end
             BAD = 1;
-            return;
+            return;%break;continue;
         end
     end
+
+
+
 end
-
-
-
-
