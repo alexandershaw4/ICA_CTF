@@ -49,6 +49,7 @@ plot_change = 0;
 % Paths
 addpath('/home/sapas10/spm12/'); 
 addpath('/home/sapas10/FastICA_25/');
+addpath(genpath('/home/sapas10/code/ICA_CTF'));
 %addpath('/home/sapas10/fieldtrip-20170509/');
 if ~exist('fasticag'); getfastica;    end
 
@@ -257,7 +258,7 @@ for t = 1:nt
         TOPOi(:,tmp) = iW(:,tmp); 
         % project spatial portion of these comps
         TOPO         = (C'*TOPOi')'; 
-        topo         = spm_robust_average(TOPO,2);
+        topo         = spm_robust_average(TOPO,2,[],loc);
 
         % correlate this trial-specific topo with mixing matrix
         [Q,ps] = corr(iW,topo);

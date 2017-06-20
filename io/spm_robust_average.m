@@ -12,6 +12,8 @@ function [Y,W] = spm_robust_average(X, dim, ks)
 % James Kilner
 % $Id: spm_robust_average.m 5856 2014-01-29 14:28:33Z vladimir $
 
+if nargin < 4; loc = 1; end
+
 if nargin < 3 || isempty(ks)
     ks = 3;
 end
@@ -101,6 +103,9 @@ while max(abs(ores-nres))>sqrt(1E-8)
 end
 
 %disp(['Robust averaging finished after ' num2str(n) ' iterations.']); 
+
+fprintf(loc,['Robust averaging finished after ' num2str(n) ' iterations.\n']); 
+
 
 %-Restore the average and weights to the original data dimensions
 %--------------------------------------------------------------------------
