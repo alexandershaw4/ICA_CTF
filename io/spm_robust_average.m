@@ -1,4 +1,4 @@
-function [Y,W] = spm_robust_average(X, dim, ks)
+function [Y,W] = spm_robust_average(X, dim, ks, loc)
 % Apply robust averaging routine to X sets
 % FORMAT [Y,W] = spm_robust_averaget(X, dim, ks)
 % X      - data matrix to be averaged
@@ -137,6 +137,3 @@ else
         Y(i) = median(X(~isnan(X(:, i)), i));
     end
 end
-
-
-
