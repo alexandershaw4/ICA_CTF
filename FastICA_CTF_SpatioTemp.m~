@@ -1,20 +1,18 @@
 function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window)
 % FastICA for CTF MEG dataset
 %
-% Generates 'windows' of n-seconds by concatenating m-trials.
-%
-% Thresholds each 'window' of epoched data, checking that no value exceeds
+% Thresholds each trial of epoched data, checking that no value exceeds
 % more than 3 * standard deviation for:
 %
 % - sample standard deviation of over trials
 % - channel standard deviation over samples
 % - standard deviation per channel over trials
 %
-% otherwise trials in window are marked as bad (written to ClassFile.cls of output .ds)
+% otherwise trial is marked as bad (written to ClassFile.cls of output .ds)
 %
-% For 'good' windows it implements:
+% For 'good' trials it implements:
 %
-% - ICA of bandpass filtered data, per window.
+% - ICA of bandpass filtered data, per trial.
 % - Find correlations between component time-series and principal component 
 %   of peripheral (EOG) channels. 
 % - Project spatial components of these correlated components and robust
@@ -34,7 +32,7 @@ function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window)
 %         fname = output dataset appendix, e.g. 'ICA' for MEG_Cut_ICA.ds
 %         bonf  = flag for bonferonni correction (def 0)
 %         writelog = flag (0/1) to write to console (default) or a logfile
-%         window = length of window to reconstruct for ICA (def = 10s)
+% 
 %
 % Dependencies: (matlab) 
 %   - fieldtrip (for ft_topoplotter)
@@ -45,8 +43,8 @@ function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window)
 % AS2017
 
 
-review_topo = 1; 
-plot_change = 0;
+review_topo = 0; 
+plot_change = 1;
 
 % Paths
 addpath('/home/sapas10/spm12/'); 
@@ -326,8 +324,7 @@ for t = 1:Nwind
         % store
         if ~isempty(common)
             this = ( C'*iW')';
-            this = reshape(this,size(cD1));
-            Data(:,:,Win) = this;
+            Data(:,:,Win) = reshape(this,size(cD1));
         end
 
         if t > 50
