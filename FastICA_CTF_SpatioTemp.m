@@ -308,7 +308,7 @@ for t = 1:Nwind
 
             % remove bad comps from MEG
             C(common,:)   = 0;
-            iW(:,common)  = 0;  
+            %iW(:,common)  = 0;  
 
             % MEG Cleaned Comps
             subplot(133),...
@@ -320,7 +320,7 @@ for t = 1:Nwind
             drawnow;
         else
             C(common,:)  = 0;
-            iW(:,common) = 0;
+            %iW(:,common) = 0;
         end
 
         % store
