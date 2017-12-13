@@ -1,4 +1,4 @@
-function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window)
+function FastICA_CTF_SpatioTemp_ORTHOG(Dname,NC,UL,fname,bonf,writelog,window)
 % FastICA for CTF MEG dataset
 %
 % Generates 'windows' of n-seconds by concatenating m-trials.
@@ -20,7 +20,7 @@ function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window)
 % - Project spatial components of these correlated components and robust
 %   (weighted) average, forming a subject specific topography. 
 % - Find correlations between this topo and spatial ICA components
-% - Remove ICA components that are both temporally & spatially correlated.
+% - *SYM ORTHOG* ICA components that are both temporally & spatially correlated.
 % - Also check the same thresholds per-component as done for real trial
 %   data. If surpases 3SDs of mean, switch off component. 
 % - After all trials, write new dataset (.ds) and write BAD to ClassFile.
@@ -188,7 +188,7 @@ for t = 1:Nwind
         % bandpass filter
         fprintf(loc,'Bandpass filtering\n');
         cD = bandpassfilter(cD,SR,[1 100]);
-        e  = bandpassfilter(e ,SR,[1 30]);
+        e  = bandpassfilter(e ,SR,[1 40]);
 
         % Sort regressors
         for ej = 1:size(e,1)
@@ -274,9 +274,6 @@ for t = 1:Nwind
         
         p_spat = unique([p_spat1(:);p_spat2(:);p_spat3(:)]);
         
-        %[Q,ps] = corr(iW,topo);
-        %p_spat = find(ps<thrp);
-
         % temporally and sptially bad
         common = tmp(ismember(tmp,p_spat));
 
@@ -322,9 +319,20 @@ for t = 1:Nwind
             set(findall(gca, 'type', 'text'), 'visible', 'on');
 
             % remove bad comps from MEG
-            C(common,:)   = 0;
+            %C(common,:)   = 0;
             %iW(:,common)  = 0;  
-
+            
+            % DO ORTHOG:
+            for or = 1:length(common)
+                c  = C(common(or),:);
+                e  ;
+                
+                o = [c' e] * real(inv([c' e]' * [c' e])^(1/2));
+                o = o(:,1);
+                c = ( o - mean(o) ) + mean(c);
+                C(common(or)) = c';
+            end   
+            
             % MEG Cleaned Comps
             subplot(133),...
             trisurf(tri,x,y,mean( (C'*iW')' ,2));    
@@ -334,7 +342,20 @@ for t = 1:Nwind
             set(findall(gca, 'type', 'text'), 'visible', 'on');
             drawnow;
         else
-            C(common,:)  = 0;
+            
+            % DO ORTHOG:
+            fprintf('Orthogo
+            for or = 1:length(common)
+                c  = C(common(or),:);
+                e  ;
+                
+                o = [c' e] * real(inv([c' e]' * [c' e])^(1/2));
+                o = o(:,1);
+                c = ( o - mean(o) ) + mean(c);
+                C(common(or)) = c';
+            end            
+            
+            %C(common,:)  = 0;
             %iW(:,common) = 0;
         end
 
@@ -345,10 +366,6 @@ for t = 1:Nwind
             Data(:,:,Win) = this;
         end
 
-        if t > 50
-            % debugging breakpoint
-            %disp('test');
-        end
 
 
         if plot_change
