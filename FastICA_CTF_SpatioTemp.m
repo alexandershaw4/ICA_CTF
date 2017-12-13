@@ -45,8 +45,8 @@ function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window)
 % AS2017
 
 
-review_topo = 1; 
-plot_change = 0;
+review_topo = 0; 
+plot_change = 1;
 
 % Paths
 addpath('/home/sapas10/spm12/'); 
@@ -337,11 +337,13 @@ for t = 1:Nwind
 
 
         if plot_change
+            thiscat = reshape(this,[size(this,1),size(this,2)*size(this,3)]);
+            timecat = linspace(time(1),time(end)*LWind,size(thiscat,2));
             subplot(221),imagesc(cD);
-            subplot(222),imagesc(this);
-            subplot(2,2,[3 4]), plot(time,this,'color',[.4 .4 .4]);hold on;
+            subplot(222),imagesc(thiscat);
+            subplot(2,2,[3 4]), plot(timecat,thiscat,'color',[.4 .4 .4]);hold on;
             eplot = TSNorm(e,5)*max(this(:));
-            plot(time,eplot,'r','LineWidth',3);hold off
+            plot(timecat,eplot,'r','LineWidth',3);hold off
             drawnow;
         end
     
@@ -373,8 +375,14 @@ if writelog;
     fclose(loc);
 end
 
+if isempty(UL)
+    UL = NT*(8*(t/NT));
+end
+allbad = find(BAD);
+allbad = allbad(1:UL);
+
 % write bad trials
-ctf_write_BadTrials((find(BAD)),[fp '/' fname fe],t)
+ctf_write_BadTrials(allbad,[fp '/' fname fe],length(allbad))
 
 end
 
