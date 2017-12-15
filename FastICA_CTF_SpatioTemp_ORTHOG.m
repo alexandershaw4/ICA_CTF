@@ -53,7 +53,6 @@ plot_change = 1;
 addpath('/home/sapas10/spm12/'); 
 addpath('/home/sapas10/FastICA_25/');
 addpath(genpath('/home/sapas10/code/ICA_CTF'));
-%addpath('/home/sapas10/fieldtrip-20170509/');
 if ~exist('fasticag'); getfastica;    end
 
 % write log, or to screen
