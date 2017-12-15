@@ -426,17 +426,8 @@ Orig(:,MEGid,:) = Data(:,:,1:size(Orig,3));
 [fp,fn,fe] = fileparts(Dname);
 if isempty(fp); fp = evalinContext('pwd'); end
 
-%newname = [Dname(1:end-3) fname];
-cd(fp);
-%fname = [newname];
-fname = [fn fname];
-writeCTFds([fp '/' fname fe],D,Orig);
 
-% close log
-if writelog;
-    fclose(loc);
-end
-
+% Bad trials
 if isempty(UL)
     UL = NT*(8*(t/NT));
 end
@@ -445,8 +436,22 @@ try
     allbad = allbad(1:UL);
 end
 
+% write the dataset
+cd(fp);
+fname = [fn fname];
+D.TrialClass.trial = allbad;
+
+writeCTFds([fp '/' fname fe],D,Orig);
+
+% close log
+if writelog;
+    fclose(loc);
+end
+
+
+
 % write bad trials
-ctf_write_BadTrials(allbad,[fp '/' fname fe],length(allbad))
+%ctf_write_BadTrials(allbad,[fp '/' fname fe],length(allbad))
 
 end
 
