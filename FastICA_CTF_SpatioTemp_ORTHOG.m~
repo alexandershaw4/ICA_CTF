@@ -95,7 +95,7 @@ if nargin < 4 || isempty(fname)
 end
 
 
-if nargin == 5 && isempty(NC)
+if nargin < 5 || isempty(NC)
     NC = size(Data,2);
 end
 
@@ -188,16 +188,21 @@ for t = 1:Nwind
         % bandpass filter
         fprintf(loc,'Bandpass filtering\n');
         cD = bandpassfilter(cD,SR,[1 100]);
-        e  = bandpassfilter(e ,SR,[1 40]);
+        e  = bandpassfilter(e ,SR,[1 20]);
 
-        % Sort regressors
+        % Normalise regressors
         for ej = 1:size(e,1)
             e(ej,:) = HighResMeanFilt(e(ej,:),1,16);
+            %e(ej,:) = TSNorm(e(ej,:));
         end
 
         % reduce dims of peripheral channels
         fprintf(loc,'Taking prinipcal component from peripheral channel matrix\n');
         e = PEig(e');
+        
+        %fprintf(loc,'Taking max abs Hilbert envelope over peripheral channels\n');
+        %e = [max( abs(hilbert(e'))' )' PEig(e')]';
+        %e = max( abs(hilbert(e'))' )';
 
         % the ica
         try
@@ -228,8 +233,12 @@ for t = 1:Nwind
         
 
         % temporal correlates
+        fprintf(loc,'Running correlations with peripheral channels\n');
+        e     = TSNorm(e);
         for i = 1:size(C,1)        
             c = C  (i,:);
+            c = TSNorm(c);
+            %c = abs(hilbert(c));
             try
                 [Q,p] = corr(c(:), e(:));
                 if any(p < thrp)
@@ -262,17 +271,20 @@ for t = 1:Nwind
         topo1         = max(TOPO')';
         topo2         = min(TOPO')';
         topo3         = PEig(TOPO); 
+        topo4         = max(abs(hilbert(TOPO))')';
 
         % correlate this trial-specific topo with mixing matrix
         [Q,ps1] = corr(iW,topo1);
         [Q,ps2] = corr(iW,topo2);
         [Q,ps3] = corr(iW,topo3);
+        [Q,ps4] = corr(iW,topo4);
         
         p_spat1 = find(ps1<thrp);
         p_spat2 = find(ps2<thrp);
         p_spat3 = find(ps3<thrp);
+        p_spat4 = find(ps4<thrp);
         
-        p_spat = unique([p_spat1(:);p_spat2(:);p_spat3(:)]);
+        p_spat  = unique([p_spat1(:);p_spat2(:);p_spat3(:);p_spat4]);
         
         % temporally and sptially bad
         common = tmp(ismember(tmp,p_spat));
@@ -323,6 +335,8 @@ for t = 1:Nwind
             %iW(:,common)  = 0;  
             
             % DO ORTHOG:
+            bad_comps = C(common,:);
+            fprintf(loc,'Orthogonalising...');
             for or = 1:length(common)
                 c  = C(common(or),:);
                 e  ;
@@ -330,7 +344,7 @@ for t = 1:Nwind
                 o = [c' e] * real(inv([c' e]' * [c' e])^(1/2));
                 o = o(:,1);
                 c = ( o - mean(o) ) + mean(c);
-                C(common(or)) = c';
+                C(common(or),:) = c';
             end   
             
             % MEG Cleaned Comps
@@ -344,7 +358,8 @@ for t = 1:Nwind
         else
             
             % DO ORTHOG:
-            fprintf('Orthogo
+            bad_comps = C(common,:);
+            fprintf(loc,'Orthogonalising...');
             for or = 1:length(common)
                 c  = C(common(or),:);
                 e  ;
@@ -352,7 +367,7 @@ for t = 1:Nwind
                 o = [c' e] * real(inv([c' e]' * [c' e])^(1/2));
                 o = o(:,1);
                 c = ( o - mean(o) ) + mean(c);
-                C(common(or)) = c';
+                C(common(or),:) = c';
             end            
             
             %C(common,:)  = 0;
@@ -371,15 +386,27 @@ for t = 1:Nwind
         if plot_change
             thiscat = reshape(this,[size(this,1),size(this,2)*size(this,3)]);
             timecat = linspace(time(1),time(end)*LWind,size(thiscat,2));
-            subplot(321),imagesc(cD);
-            subplot(322),imagesc(thiscat);
+            %subplot(321),imagesc(cD);
+            %subplot(322),imagesc(thiscat);
+%             for bc = 1:size(bad_comps,1)
+%                 bcomp(bc,:) = bc + (TSNorm(bad_comps(bc,:)));
+%             end
+            eplot = TSNorm(e,5)*max(bad_comps(:));
+            tmp = C*0;
+            tmp(common,:) = bad_comps;
+            tmp = (tmp'*iW')';
+            
+            subplot(3,2,[1 2]),imagesc([eplot';tmp]); title('Bad components'); hold on;
+            
+            %eplot = TSNorm(e,5);%*max(abs(bad_comps(:)));
+            %plot(timecat,eplot,'r','LineWidth',3);hold off
             
             subplot(3,2,[3 4]), plot(timecat,cD     ,'color',[.4 .4 .4]);hold on;
-            eplot = TSNorm(e,5)*max(this(:));
+            eplot = TSNorm(e,5)*max(this(:)); title('Raw data');
             plot(timecat,eplot,'r','LineWidth',3);hold off
             
             subplot(3,2,[5 6]), plot(timecat,thiscat,'color',[.4 .4 .4]);hold on;
-            plot(timecat,eplot,'r','LineWidth',3);hold off
+            plot(timecat,eplot,'r','LineWidth',3);hold off;title('Components removed');
             drawnow;
         end
     
@@ -415,7 +442,9 @@ if isempty(UL)
     UL = NT*(8*(t/NT));
 end
 allbad = find(BAD);
-allbad = allbad(1:UL);
+try
+    allbad = allbad(1:UL);
+end
 
 % write bad trials
 ctf_write_BadTrials(allbad,[fp '/' fname fe],length(allbad))
