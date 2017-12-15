@@ -2,10 +2,14 @@
 
 An implementation of the FastICA algorithm for (epoched) CTF MEG data that has EOG and/or other peripheral (e.g. EMG) channel recordings. Generates subject specific topographies on the fly.
 
-Example usage:
+Example usages:
 ```
-FastICA_CTF_SpatioTemp(MEG_Cut.ds,NC,UL,'_ica',1,20) % specify num comps, max to reject & write logfile
-FastICA_CTF_SpatioTemp(MEG_Cut.ds,[],[],'_ica',0,20) % use defaults and print to matlab
+% For version which removes correlated components:
+ FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window) % specify num comps, max to reject & write logfile
+ FastICA_CTF_SpatioTemp(MEG_Cut.ds, [],[],'_ica',0,0,20)        % use defaults and print to matlab
+ 
+% For version which orthogonalises correlated components:
+ FastICA_CTF_SpatioTemp_ORTHOG(f,60,[],'OrthogICA',0,0,20) 
 ```
 Inputs:
 * Dname = (epoched) CTF .ds dataset
