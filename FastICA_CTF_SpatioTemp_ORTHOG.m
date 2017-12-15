@@ -27,6 +27,10 @@ function FastICA_CTF_SpatioTemp_ORTHOG(Dname,NC,UL,fname,bonf,writelog,window)
 %
 % Example usage:
 %               FastICA_CTF_SpatioTemp(MEG_Cut.ds,[],[],'_ica',0)
+%
+% Recommended settings:
+%
+%               FastICA_CTF_SpatioTemp_ORTHOG(f,60,[],'OrthogICA',0,0,20)
 % Inputs:
 %         Dname = (epoched) CTF .ds dataset
 %         NC    = number of components in data (optional, def = num chans)
@@ -390,7 +394,7 @@ for t = 1:Nwind
             tmp = C*0;
             tmp(common,:) = bad_comps;
             tmp = (tmp'*iW')';
-            tmp = bandpassfilter(tmp,SR,[1 30]); %<-just for plotting
+            tmp = bandpassfilter(tmp,SR,[1 20]); %<-just for plotting
             
             subplot(3,2,[1 2]),plot(timecat,tmp); title('Bad components'); hold on;
             eplot = TSNorm(e,5)*max(tmp(:));

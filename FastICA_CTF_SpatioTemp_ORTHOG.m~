@@ -27,6 +27,10 @@ function FastICA_CTF_SpatioTemp_ORTHOG(Dname,NC,UL,fname,bonf,writelog,window)
 %
 % Example usage:
 %               FastICA_CTF_SpatioTemp(MEG_Cut.ds,[],[],'_ica',0)
+%
+% Recommended settings:
+%
+%               FastICA_CTF_SpatioTemp_ORTHOG(f,60,[],'OrthogICA',0,0,20)
 % Inputs:
 %         Dname = (epoched) CTF .ds dataset
 %         NC    = number of components in data (optional, def = num chans)
@@ -188,7 +192,7 @@ for t = 1:Nwind
         % bandpass filter
         fprintf(loc,'Bandpass filtering\n');
         cD = bandpassfilter(cD,SR,[1 100]);
-        e  = bandpassfilter(e ,SR,[1 20]);
+        e  = bandpassfilter(e ,SR,[1 30]);
 
         % Normalise regressors
         for ej = 1:size(e,1)
@@ -386,20 +390,15 @@ for t = 1:Nwind
         if plot_change
             thiscat = reshape(this,[size(this,1),size(this,2)*size(this,3)]);
             timecat = linspace(time(1),time(end)*LWind,size(thiscat,2));
-            %subplot(321),imagesc(cD);
-            %subplot(322),imagesc(thiscat);
-%             for bc = 1:size(bad_comps,1)
-%                 bcomp(bc,:) = bc + (TSNorm(bad_comps(bc,:)));
-%             end
-            eplot = TSNorm(e,5)*max(bad_comps(:));
+            
             tmp = C*0;
             tmp(common,:) = bad_comps;
             tmp = (tmp'*iW')';
+            tmp = bandpassfilter(tmp,SR,[1 20]); %<-just for plotting
             
-            subplot(3,2,[1 2]),imagesc([eplot';tmp]); title('Bad components'); hold on;
-            
-            %eplot = TSNorm(e,5);%*max(abs(bad_comps(:)));
-            %plot(timecat,eplot,'r','LineWidth',3);hold off
+            subplot(3,2,[1 2]),plot(timecat,tmp); title('Bad components'); hold on;
+            eplot = TSNorm(e,5)*max(tmp(:));
+            plot(timecat,eplot,'r','LineWidth',3);hold off
             
             subplot(3,2,[3 4]), plot(timecat,cD     ,'color',[.4 .4 .4]);hold on;
             eplot = TSNorm(e,5)*max(this(:)); title('Raw data');
@@ -427,17 +426,8 @@ Orig(:,MEGid,:) = Data(:,:,1:size(Orig,3));
 [fp,fn,fe] = fileparts(Dname);
 if isempty(fp); fp = evalinContext('pwd'); end
 
-%newname = [Dname(1:end-3) fname];
-cd(fp);
-%fname = [newname];
-fname = [fn fname];
-writeCTFds([fp '/' fname fe],D,Orig);
 
-% close log
-if writelog;
-    fclose(loc);
-end
-
+% Bad trials
 if isempty(UL)
     UL = NT*(8*(t/NT));
 end
@@ -446,8 +436,22 @@ try
     allbad = allbad(1:UL);
 end
 
+% write the dataset
+cd(fp);
+fname = [fn fname];
+D.TrialClass.trial = allbad;
+
+writeCTFds([fp '/' fname fe],D,Orig);
+
+% close log
+if writelog;
+    fclose(loc);
+end
+
+
+
 % write bad trials
-ctf_write_BadTrials(allbad,[fp '/' fname fe],length(allbad))
+%ctf_write_BadTrials(allbad,[fp '/' fname fe],length(allbad))
 
 end
 
