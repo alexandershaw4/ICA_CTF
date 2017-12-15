@@ -1,5 +1,5 @@
 function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window)
-% FastICA for CTF MEG dataset
+% FastICA for CTF MEG dataset - removal verison.
 %
 % Generates 'windows' of n-seconds by concatenating m-trials.
 %
@@ -17,16 +17,19 @@ function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window)
 % - ICA of bandpass filtered data, per window.
 % - Find correlations between component time-series and principal component 
 %   of peripheral (EOG) channels. 
-% - Project spatial components of these correlated components and robust
-%   (weighted) average, forming a subject specific topography. 
-% - Find correlations between this topo and spatial ICA components
+% - Project spatial components of these correlated components
+% - Find correlations between max/peig/hilb topo and spatial ICA components
 % - Remove ICA components that are both temporally & spatially correlated.
 % - Also check the same thresholds per-component as done for real trial
 %   data. If surpases 3SDs of mean, switch off component. 
 % - After all trials, write new dataset (.ds) and write BAD to ClassFile.
 %
 % Example usage:
-%               FastICA_CTF_SpatioTemp(MEG_Cut.ds,[],[],'_ica',0)
+%               FastICA_CTF_SpatioTemp(MEG_Cut.ds,[],[],'_ica',0,0)
+%
+% Recommended settings:
+%               FastICA_CTF_SpatioTemp_ORTHOG(f,60,[],'_ica',0,0,20)
+%
 % Inputs:
 %         Dname = (epoched) CTF .ds dataset
 %         NC    = number of components in data (optional, def = num chans)
@@ -37,8 +40,6 @@ function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window)
 %         window = length of window to reconstruct for ICA (def = 10s)
 %
 % Dependencies: (matlab) 
-%   - fieldtrip (for ft_topoplotter)
-%   - spm (for spm_vec & spm_robust_average) [included]
 %   - fastica algorithm
 %   - the other tools in this github package
 %
@@ -262,21 +263,21 @@ for t = 1:Nwind
         topo1         = max(TOPO')';
         topo2         = min(TOPO')';
         topo3         = PEig(TOPO); 
+        topo4         = max(abs(hilbert(TOPO))')';
 
         % correlate this trial-specific topo with mixing matrix
         [Q,ps1] = corr(iW,topo1);
         [Q,ps2] = corr(iW,topo2);
         [Q,ps3] = corr(iW,topo3);
-        
+        [Q,ps4] = corr(iW,topo4);
+
         p_spat1 = find(ps1<thrp);
         p_spat2 = find(ps2<thrp);
         p_spat3 = find(ps3<thrp);
-        
-        p_spat = unique([p_spat1(:);p_spat2(:);p_spat3(:)]);
-        
-        %[Q,ps] = corr(iW,topo);
-        %p_spat = find(ps<thrp);
+        p_spat4 = find(ps4<thrp);
 
+        p_spat  = unique([p_spat1(:);p_spat2(:);p_spat3(:);p_spat4]);
+        
         % temporally and sptially bad
         common = tmp(ismember(tmp,p_spat));
 
@@ -288,8 +289,7 @@ for t = 1:Nwind
 
 
         if review_topo
-            cfg.layout = 'CTF275.lay';
-            thelay     = ft_prepare_layout(cfg);
+            try thelay; catch; load('ctflay'); end
 
             x   = thelay.pos(1:length(MEGid),1);
             y   = thelay.pos(1:length(MEGid),2);
@@ -383,25 +383,26 @@ Orig(:,MEGid,:) = Data(:,:,1:size(Orig,3));
 [fp,fn,fe] = fileparts(Dname);
 if isempty(fp); fp = evalinContext('pwd'); end
 
-%newname = [Dname(1:end-3) fname];
+% Bad trials
+if isempty(UL)
+    UL = NT*(8*(t/NT));
+end
+allbad = find(BAD);
+try
+    allbad = allbad(1:UL);
+end
+
+% write the dataset including bad markers
 cd(fp);
-%fname = [newname];
 fname = [fn fname];
+D.TrialClass.trial = allbad;
+
 writeCTFds([fp '/' fname fe],D,Orig);
 
 % close log
 if writelog;
     fclose(loc);
 end
-
-if isempty(UL)
-    UL = NT*(8*(t/NT));
-end
-allbad = find(BAD);
-allbad = allbad(1:UL);
-
-% write bad trials
-ctf_write_BadTrials(allbad,[fp '/' fname fe],length(allbad))
 
 end
 

@@ -1,5 +1,5 @@
 function FastICA_CTF_SpatioTemp_ORTHOG(Dname,NC,UL,fname,bonf,writelog,window)
-% FastICA for CTF MEG dataset
+% FastICA for CTF MEG dataset - orthog version.
 %
 % Generates 'windows' of n-seconds by concatenating m-trials.
 %
@@ -17,9 +17,8 @@ function FastICA_CTF_SpatioTemp_ORTHOG(Dname,NC,UL,fname,bonf,writelog,window)
 % - ICA of bandpass filtered data, per window.
 % - Find correlations between component time-series and principal component 
 %   of peripheral (EOG) channels. 
-% - Project spatial components of these correlated components and robust
-%   (weighted) average, forming a subject specific topography. 
-% - Find correlations between this topo and spatial ICA components
+% - Project spatial components of these correlated components 
+% - Find correlations between max/peig/hilb topo and spatial ICA components
 % - *SYM ORTHOG* ICA components that are both temporally & spatially correlated.
 % - Also check the same thresholds per-component as done for real trial
 %   data. If surpases 3SDs of mean, switch off component. 
@@ -29,8 +28,8 @@ function FastICA_CTF_SpatioTemp_ORTHOG(Dname,NC,UL,fname,bonf,writelog,window)
 %               FastICA_CTF_SpatioTemp(MEG_Cut.ds,[],[],'_ica',0)
 %
 % Recommended settings:
-%
 %               FastICA_CTF_SpatioTemp_ORTHOG(f,60,[],'OrthogICA',0,0,20)
+%
 % Inputs:
 %         Dname = (epoched) CTF .ds dataset
 %         NC    = number of components in data (optional, def = num chans)
@@ -41,8 +40,6 @@ function FastICA_CTF_SpatioTemp_ORTHOG(Dname,NC,UL,fname,bonf,writelog,window)
 %         window = length of window to reconstruct for ICA (def = 10s)
 %
 % Dependencies: (matlab) 
-%   - fieldtrip (for ft_topoplotter)
-%   - spm (for spm_vec & spm_robust_average) [included]
 %   - fastica algorithm
 %   - the other tools in this github package
 %
@@ -301,8 +298,7 @@ for t = 1:Nwind
 
 
         if review_topo
-            cfg.layout = 'CTF275.lay';
-            thelay     = ft_prepare_layout(cfg);
+            try thelay; catch; load('ctflay'); end
 
             x   = thelay.pos(1:length(MEGid),1);
             y   = thelay.pos(1:length(MEGid),2);
@@ -447,11 +443,6 @@ writeCTFds([fp '/' fname fe],D,Orig);
 if writelog;
     fclose(loc);
 end
-
-
-
-% write bad trials
-%ctf_write_BadTrials(allbad,[fp '/' fname fe],length(allbad))
 
 end
 
