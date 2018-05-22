@@ -8,6 +8,7 @@ function y = TSNorm(x,varargin)
 % 5 = scale approx [-1 1]
 % 6 = scale between [-n and n]*
 % 7 = scale by unit length (./norm(x))
+% 8 = scale between n and m
 %
 % works on most datatypes (vect,matrix,cell etc) by calling SPMs
 % [un]vectorising functions.
@@ -23,7 +24,7 @@ function y = TSNorm(x,varargin)
 
 % methods:
 %--------------------------
-T = {'Def','Max','Std','Mean','minusone','between','norm'};
+T = {'Def','Max','Std','Mean','minusone','between','norm','nxm'};
 
 if nargin > 1; t = T{varargin{1}};
 else           t = T{1}; 
@@ -33,11 +34,15 @@ if nargin > 2
     n = varargin{2};
 end
 
+if nargin >= 3
+    m = varargin{3};
+end
+
 % matrix treatment:
 %--------------------------
 try varargin{3}; catch varargin{3} = 0; end
 
-if  varargin{3} ~= 1   
+if  varargin{3} ~= 1 
     % vectorise and normalise against one constant
     s = x;
     x = spm_vec(x);
@@ -84,7 +89,9 @@ switch t
     case 'minusone';
         
     % scale [-1 1]
-    y = (x-mean(x))/max(x);
+    %y = (x-mean(x))/max(x);
+    n = 1;
+    y = -n + (abs(n)*2).*(x - min(x))./(max(x) - min(x));  
     
     case 'between';
     
@@ -95,6 +102,11 @@ switch t
         
     % scale by unit length
     y = x./norm(x);
+    
+    case 'nxm';
+        
+    % scale between m and n
+    y = n + (m - n) .* TSNorm(x,1);
     
 end
 

@@ -150,6 +150,7 @@ chan_thr = 1/7; % proportion of channels to simultaneously have noise*
 % Generate 'block' window of n-trials
 window;
 LWind = window / (NS/SR);
+LWind = round(LWind);
 W1    = 1:LWind:(NT-LWind);
 W2    = LWind:LWind:(NT); 
 Nwind = length(W1);
