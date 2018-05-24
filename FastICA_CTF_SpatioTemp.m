@@ -46,12 +46,19 @@ function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window)
 % AS2017
 
 
+% plot options
 review_topo = 0; 
 plot_change = 1;
+review_spatial = 0;
 
 % switches for thresholding
 threshold_raw   = 0;
-threshold_comps = 0;
+threshold_comps = 1;
+
+% thresholding options
+thr.samp_std_over_trials     = 0;
+thr.chan_std_over_samples    = 1;
+thr.std_per_chan_over_trials = 1;
 
 % bandpass edges
 data_bpf = [1 100];%[1 100];
@@ -60,8 +67,9 @@ peri_bpf = [1 100];%[1 30];
 % define which measures to perform topo correlations on
 opt.max  = 1; % max values
 opt.min  = 1; % min values
-opt.eig  = 0; % principal eigenvalues
+opt.eig  = 1; % principal eigenvalues
 opt.hilb = 1; % hilbert evelope
+
 
 % Paths
 addpath('/home/sapas10/spm12/'); 
@@ -99,6 +107,7 @@ if nargin < 3
     UL = [];
 end
 
+% Window length, in seconds
 if nargin < 7
     window = 10;
 end
@@ -125,7 +134,6 @@ end
 % Read epoch info from hist
 T{1} = [' regexp(D.hist, ''StartTime: *'', ''match'') '];
 T{2} = [' regexp(D.hist, ''EndTime: *'', ''match'') '];
-
 
 [o1,o2] = eval(T{1});
 onset   = str2num(D.hist(o2+11:o2+16));
@@ -190,7 +198,7 @@ for t = 1:Nwind
     %thresh check trial first
     %--------------------------
     if threshold_raw
-        [BAD(Win),STR] = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,Win,1);
+        [BAD(Win),STR] = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,Win,1,thr);
     
         if any(BAD(Win));
             fprintf(loc,STR);
@@ -207,13 +215,13 @@ for t = 1:Nwind
         cD = bandpassfilter(cD,SR,data_bpf);
         e  = bandpassfilter(e ,SR,peri_bpf);
 
-        % Sort regressors
-        for ej = 1:size(e,1)
-            e(ej,:) = HighResMeanFilt(e(ej,:),1,16);
-        end
+%         % Sort regressors
+%         for ej = 1:size(e,1)
+%             e(ej,:) = HighResMeanFilt(e(ej,:),1,16);
+%         end
 
         % reduce dims of peripheral channels
-        fprintf(loc,'Taking prinipcal component from peripheral channel matrix\n');
+        fprintf(loc,'Taking prinipcal component from peripheral (EOG etc) channel matrix\n');
         try
             e = PEig(e');
         catch
@@ -243,7 +251,7 @@ for t = 1:Nwind
                 xx = C(ch,:);
                 yy = iw(:,ch);
                 thiscomp = ( xx'* yy' )';            
-                bad_comp = threshold(thiscomp,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,ch,0);
+                bad_comp = threshold(thiscomp,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,ch,0,thr);
 
                 if bad_comp
                     fprintf(loc,'Rejecting component %d based on noise\n',ch);
@@ -280,8 +288,10 @@ for t = 1:Nwind
         % make topographies for these
         TOPOi        = iW*0;
         TOPOi(:,tmp) = iW(:,tmp); 
+        tC           = C*0;
+        tC(tmp,:)    = C(tmp,:);
         % project spatial portion of these comps
-        TOPO         = (C'*TOPOi')'; 
+        TOPO         = (tC'*TOPOi')'; 
         %topo        = spm_robust_average(TOPO,2,[],loc);
         
         % use max, min and peig
@@ -315,6 +325,23 @@ for t = 1:Nwind
         end
         
         p_spat  = unique([p_spat1(:);p_spat2(:);p_spat3(:);p_spat4]);
+        
+        if review_spatial
+            try thelay; catch; load('ctflay'); end
+            x   = thelay.pos(1:length(MEGid),1);
+            y   = thelay.pos(1:length(MEGid),2);
+            tri = delaunay(x,y);  
+            
+            subplot(2,2,1),trisurf(tri,x,y,topo1); title('max'); view([0 90]);
+            hold on;shading interp;
+            subplot(2,2,2),trisurf(tri,x,y,topo2); title('min'); view([0 90]);
+            shading interp;
+            subplot(2,2,3),trisurf(tri,x,y,topo3); title('eig'); view([0 90]);
+            shading interp;
+            subplot(2,2,4),trisurf(tri,x,y,topo4); title('hilb'); view([0 90]);
+            shading interp;
+        end
+
         
         % temporally and sptially bad
         common = tmp(ismember(tmp,p_spat));
@@ -411,7 +438,7 @@ for t = 1:Nwind
             thebad = (badcomp'*iW')';
             subplot(4,2,[7 8]), plot(timecat,thebad,'color',[.4 .4 .4]);hold on;
             plot(timecat,mean((bandpassfilter(thebad ,SR,[1 30]))),'b','LineWidth',2)
-            plot(timecat,eplot,'r','LineWidth',3);hold off;
+            plot(timecat,eplot,'r','LineWidth',2);hold off;
             drawnow;
         end
     
@@ -470,32 +497,40 @@ addpath('FastICA-master');
 end
 
 
-function [BAD,STR] = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,t,v)
+function [BAD,STR] = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,t,v,thr)
 
     % threshold check first, just reject trial
     %-----------------------------------------
     BAD = 0;
     STR = [];
     noise  = cD > thr_chan;
-    for ch = 1:size(cD,1) 
-        if sum(noise(ch,:)) > round(NS*samp_thr); 
-            if v; STR=sprintf('Rejecting trial(s) %d on channel noise (samp std over trials)\n',t);end
-            BAD = 1; 
-            return;%break;continue
+    if thr.samp_std_over_trials
+        for ch = 1:size(cD,1) 
+            if sum(noise(ch,:)) > round(NS*samp_thr); 
+                if v; STR=sprintf('Rejecting trial(s) %d on channel noise (samp std over trials)\n',t);end
+                BAD = 1; 
+                return;%break;continue
+            end
         end
     end
-    for ch = 1:size(cD,2)
-        if sum(noise(:,ch)) > round(size(MEGid,1)*chan_thr);
-            if v; STR=sprintf('Rejecting trial(s) %d on channel noise (chan std over samples)\n',t);end
-            BAD = 1;
-            return;%break;continue
+    
+    if thr.chan_std_over_samples
+        for ch = 1:size(cD,2)
+            if sum(noise(:,ch)) > round(size(MEGid,1)*chan_thr);
+                if v; STR=sprintf('Rejecting trial(s) %d on channel noise (chan std over samples)\n',t);end
+                BAD = 1;
+                return;%break;continue
+            end
         end
     end
-    for ch = 1:NS
-        if noise(:,ch) > (mean(thr_samp,2)/NS);
-            if v; STR=sprintf('Rejecting trial(s) %d on sample noise (std per chan over trials)\n',t);end
-            BAD = 1;
-            return;%break;continue;
+    
+    if thr.std_per_chan_over_trials
+        for ch = 1:NS
+            if noise(:,ch) > (mean(thr_samp,2)/NS);
+                if v; STR=sprintf('Rejecting trial(s) %d on sample noise (std per chan over trials)\n',t);end
+                BAD = 1;
+                return;%break;continue;
+            end
         end
     end
 

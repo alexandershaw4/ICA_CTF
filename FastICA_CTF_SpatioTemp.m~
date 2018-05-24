@@ -59,9 +59,9 @@ peri_bpf = [1 100];%[1 30];
 
 % define which measures to perform topo correlations on
 opt.max  = 1; % max values
-opt.min  = 1;
-opt.eig  = 0;
-opt.hilb = 1;
+opt.min  = 1; % min values
+opt.eig  = 0; % principal eigenvalues
+opt.hilb = 1; % hilbert evelope
 
 % Paths
 addpath('/home/sapas10/spm12/'); 
@@ -215,11 +215,13 @@ for t = 1:Nwind
         % reduce dims of peripheral channels
         fprintf(loc,'Taking prinipcal component from peripheral channel matrix\n');
         try
-            e = PEig(e');
+            %e = PEig(e');
+            e = nPEig(e',1);
         catch
             fprintf(loc,['EOG / peripheral channel is too big to do an ' ...
                          'eigen decomposition\nso using mean channel data instead\n']);
             e = mean(e,1);
+            opt.eig = 0;
         end
 
         % the ica
@@ -279,8 +281,10 @@ for t = 1:Nwind
         % make topographies for these
         TOPOi        = iW*0;
         TOPOi(:,tmp) = iW(:,tmp); 
+        tC           = C*0;
+        tC(tmp,:)    = C(tmp,:);
         % project spatial portion of these comps
-        TOPO         = (C'*TOPOi')'; 
+        TOPO         = (tC'*TOPOi')'; 
         %topo        = spm_robust_average(TOPO,2,[],loc);
         
         % use max, min and peig
