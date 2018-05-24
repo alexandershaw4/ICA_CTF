@@ -59,9 +59,9 @@ peri_bpf = [1 100];%[1 30];
 
 % define which measures to perform topo correlations on
 opt.max  = 1; % max values
-opt.min  = 1; % min values
-opt.eig  = 0; % principal eigenvalues
-opt.hilb = 1; % hilbert evelope
+opt.min  = 1;
+opt.eig  = 0;
+opt.hilb = 1;
 
 % Paths
 addpath('/home/sapas10/spm12/'); 
@@ -220,7 +220,6 @@ for t = 1:Nwind
             fprintf(loc,['EOG / peripheral channel is too big to do an ' ...
                          'eigen decomposition\nso using mean channel data instead\n']);
             e = mean(e,1);
-            opt.eig = 0;
         end
 
         % the ica
