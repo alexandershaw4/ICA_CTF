@@ -1,74 +1,57 @@
-function FastICA_CTF_SpatioTemp(Dname,NC,UL,fname,bonf,writelog,window)
+function FastICA_CTF_SpatioTemp(cfg,thr,plots)
 % FastICA for CTF MEG dataset - removal verison.
 %
 % Generates 'windows' of n-seconds by concatenating m-trials.
 %
-% Thresholds each 'window' of epoched data, checking that no value exceeds
-% more than 3 * standard deviation for:
+% Inputs
 %
-% - sample standard deviation of over trials
-% - channel standard deviation over samples
-% - standard deviation per channel over trials
-%
-% otherwise trials in window are marked as bad (written to ClassFile.cls of output .ds)
-%
-% For 'good' windows it implements:
-%
-% - ICA of bandpass filtered data, per window.
-% - Find correlations between component time-series and principal component 
-%   of peripheral (EOG) channels. 
-% - Project spatial components of these correlated components
-% - Find correlations between max/peig/hilb topo and spatial ICA components
-% - Remove ICA components that are both temporally & spatially correlated.
-% - Also check the same thresholds per-component as done for real trial
-%   data. If surpases 3SDs of mean, switch off component. 
-% - After all trials, write new dataset (.ds) and write BAD to ClassFile.
-%
-% Example usage:
-%               FastICA_CTF_SpatioTemp(MEG_Cut.ds,[],[],'_ica',0,0)
-%
-% Recommended settings:
-%               FastICA_CTF_SpatioTemp_ORTHOG(f,60,[],'_ica',0,0,20)
-%
-% Inputs:
-%         Dname = (epoched) CTF .ds dataset
-%         NC    = number of components in data (optional, def = num chans)
-%         UL    = upper limit on number of comps to reject (optional)
-%         fname = output dataset appendix, e.g. 'ICA' for MEG_Cut_ICA.ds
-%         bonf  = flag for bonferonni correction (def 0)
-%         writelog = flag (0/1) to write to console (default) or a logfile
-%         window = length of window to reconstruct for ICA (def = 10s)
-%
-% Dependencies: (matlab) 
-%   - fastica algorithm
-%   - the other tools in this github package
-%
-% AS2017
+% cfg.Dname    = 'MEG.ds'; % the CTF MEG dataset
+% cfg.NC       = [];       % number of components to find [def num chans]
+% cfg.UL       = [];       % max number of components to reject [def none]
+% cfg.fname    = 'ica';    % appendix for output file [def 'ica']
+% cfg.bonf     = 0;        % whether to Bonferonni correct correls [def 0]
+% cfg.writelog = 0;        % whether to write logfile (1) or to console (0)
+% cfg.window   = 20;       % window length for ICA computation (def 20 seconds)
+% cfg.funcs    = [];       % *functions to apply to spatial data for correlation
+% cfg.dfuncs   = [];       % *functions to apply to component (time) data (e.g. hilbert)
+% cfg.bpf_data = [1 100];  % bandpass edges for the MEG channel data
+% cfg.bpf_eogs = [1 100];  % bandpass edges for EOG + peripheral channels
+% 
+% 
+% thr.threshold_raw            = 0; % flag to threshold the raw data [def 0]
+% thr.threshold_comps          = 1; % flag to threshold components [def 1]
+% thr.samp_std_over_trials     = 0; % what to threshold: samp_std_over_trials
+% thr.chan_std_over_samples    = 1; %                    chan_std_over_samples
+% thr.std_per_chan_over_trials = 1; %                    std_per_chan_over_trials
+% 
+% plots.review_topo    = 0; % flag to plot topography for each window
+% plots.plot_change    = 1;
+% plots.review_spatial = 1;
 
+% Parse input structures: config
+if ~isfield(cfg,'Dname');   return;           else; Dname    = cfg.Dname;end
+if ~isfield(cfg,'NC');      NC       = [];    else; NC       = cfg.NC;   end
+if ~isfield(cfg,'UL');      UL       = [];    else; UL       = cfg.UL;   end
+if ~isfield(cfg,'fname');   fname    = 'ica'; else; fname    = cfg.fname;end
+if ~isfield(cfg,'bonf');    bonf     = 0;     else; bonf     = cfg.bonf; end
+if ~isfield(cfg,'writelog');writelog = 0;     else; writelog = 1;        end
+if ~isfield(cfg,'window');  window   = 20;    else; window   = cfg.window; end
+if ~isfield(cfg,'funcs');   funcs    = defs;  else; funcs    = cfg.funcs;  end
+if ~isfield(cfg,'dfuncs');  dfuncs   = defs_d;  else; dfuncs = cfg.dfuncs; end
+if ~isfield(cfg,'bpf_data');data_bpf = [1 100]; else; data_bpf = cfg.bpf_data;end
+if ~isfield(cfg,'bpf_eogs');peri_bpf = [1 100]; else; peri_bpf = cfg.bpf_eogs;end
 
-% plot options
-review_topo = 0; 
-plot_change = 1;
-review_spatial = 0;
+% Thresholds
+if ~isfield(thr,'threshold_raw');           thr.threshold_raw            = 0;end
+if ~isfield(thr,'threshold_comps');         thr.threshold_comps          = 1;end
+if ~isfield(thr,'samp_std_over_trials');    thr.samp_std_over_trials     = 0;end
+if ~isfield(thr,'chan_std_over_samples');   thr.chan_std_over_samples    = 1;end
+if ~isfield(thr,'std_per_chan_over_trials');thr.std_per_chan_over_trials = 1;end
 
-% switches for thresholding
-threshold_raw   = 0;
-threshold_comps = 1;
-
-% thresholding options
-thr.samp_std_over_trials     = 0;
-thr.chan_std_over_samples    = 1;
-thr.std_per_chan_over_trials = 1;
-
-% bandpass edges
-data_bpf = [1 100];%[1 100];
-peri_bpf = [1 100];%[1 30];
-
-% define which measures to perform topo correlations on
-opt.max  = 1; % max values
-opt.min  = 1; % min values
-opt.eig  = 1; % principal eigenvalues
-opt.hilb = 1; % hilbert evelope
+% Plots
+if ~isfield(plots,'review_topo');   review_topo   = 0; else; review_topo    = plots.review_topo;   end
+if ~isfield(plots,'plot_change');   plot_change   = 1; else; plot_change    = plots.plot_change;   end
+if ~isfield(plots,'review_spatial');review_spatial= 1; else; review_spatial = plots.review_spatial;end
 
 
 % Paths
@@ -102,34 +85,18 @@ Orig = Data;
 Data = Data(:,MEGid,:);
 E    = Orig(:,Periph,:);
 
-% Max number rejected components
-if nargin < 3
-    UL = [];
-end
 
-% Window length, in seconds
-if nargin < 7
-    window = 10;
-end
-
-% New file name [clone]
-if nargin < 4 || isempty(fname)
-    fname = 'ica';
-end
-
-
-if nargin == 5 && isempty(NC)
-    NC = size(Data,2);
-end
+% How many components
+if isempty(NC); NC = size(Data,2); end
 
 % Bonferroni or not
-if nargin < 5; bonf = 0; end
 if ~bonf
      thrp = .05;
      fprintf(loc,'Not Bonferroni correcting...\n');
 else thrp = .05 / NC;
      fprintf(loc,'Bonferroni correcting...\n');
 end
+
 
 % Read epoch info from hist
 T{1} = [' regexp(D.hist, ''StartTime: *'', ''match'') '];
@@ -197,7 +164,7 @@ for t = 1:Nwind
     
     %thresh check trial first
     %--------------------------
-    if threshold_raw
+    if thr.threshold_raw
         [BAD(Win),STR] = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,Win,1,thr);
     
         if any(BAD(Win));
@@ -214,11 +181,6 @@ for t = 1:Nwind
         fprintf(loc,'Bandpass filtering\n');
         cD = bandpassfilter(cD,SR,data_bpf);
         e  = bandpassfilter(e ,SR,peri_bpf);
-
-%         % Sort regressors
-%         for ej = 1:size(e,1)
-%             e(ej,:) = HighResMeanFilt(e(ej,:),1,16);
-%         end
 
         % reduce dims of peripheral channels
         fprintf(loc,'Taking prinipcal component from peripheral (EOG etc) channel matrix\n');
@@ -245,7 +207,7 @@ for t = 1:Nwind
         end
         
         % do same thresholding on each component
-        if threshold_comps
+        if thr.threshold_comps
             for ch = 1:size(C,1)
                 iw = pinv(W);
                 xx = C(ch,:);
@@ -261,17 +223,25 @@ for t = 1:Nwind
         end
         
 
-        % temporal correlates
+        % temporal correlates of the coomponents
         for i = 1:size(C,1)        
-            c = C  (i,:);
-            try
-                [Q,p] = corr(c(:), e(:));
-                if any(p < thrp)
-                    p_temp(i) = (p);
+            %c = C  (i,:);
+            
+            % functions of C
+            for i0 = 1:length(dfuncs)
+                f0 = dfuncs{i0};
+                c  = C (i,:);
+                c  = f0(c);
+ 
+                try
+                    [Q,p] = corr(c(:), e(:));
+                    if any(p < thrp)
+                        p_temp(i) = (p);
+                    end
+                catch
+                    fprintf(loc,'Could not run correlations for component %d\n',i);
+                    p = [];
                 end
-            catch
-                fprintf(loc,'Could not run correlations for component %d\n',i);
-                p = [];
             end
         end  
 
@@ -290,56 +260,31 @@ for t = 1:Nwind
         TOPOi(:,tmp) = iW(:,tmp); 
         tC           = C*0;
         tC(tmp,:)    = C(tmp,:);
-        % project spatial portion of these comps
         TOPO         = (tC'*TOPOi')'; 
-        %topo        = spm_robust_average(TOPO,2,[],loc);
         
         % use max, min and peig
-        if opt.max
-            topo1   = max(TOPO')';
-            [Q,ps1] = corr(iW,topo1);
-            p_spat1 = find(ps1<thrp);
-        else
-            p_spat1 = [];
-        end
-        if opt.min
-            topo2   = min(TOPO')';
-            [Q,ps2] = corr(iW,topo2);
-            p_spat2 = find(ps2<thrp);
-        else
-            p_spat2 = [];
-        end
-        if opt.eig
-            topo3   = PEig(TOPO);
-            [Q,ps3] = corr(iW,topo3);
-            p_spat3 = find(ps3<thrp);
-        else
-            p_spat3 = [];
-        end
-        if opt.hilb
-            topo4   = max(abs(hilbert(TOPO))')';
-            [Q,ps4] = corr(iW,topo4);
-            p_spat4 = find(ps4<thrp);
-        else
-            p_spat4 = [];
+        for i0 = 1:length(funcs)
+            f  = funcs{i0};
+            
+            Y{i0}    = f(TOPO);
+            [Q,ps]   = corr(iW,Y{i0});
+            p_sp{i0} = find(ps<thrp);
         end
         
-        p_spat  = unique([p_spat1(:);p_spat2(:);p_spat3(:);p_spat4]);
+        p_spat  = unique(cat(1,p_sp{:}));
         
         if review_spatial
             try thelay; catch; load('ctflay'); end
             x   = thelay.pos(1:length(MEGid),1);
             y   = thelay.pos(1:length(MEGid),2);
             tri = delaunay(x,y);  
+            npl = length(funcs);
             
-            subplot(2,2,1),trisurf(tri,x,y,topo1); title('max'); view([0 90]);
-            hold on;shading interp;
-            subplot(2,2,2),trisurf(tri,x,y,topo2); title('min'); view([0 90]);
-            shading interp;
-            subplot(2,2,3),trisurf(tri,x,y,topo3); title('eig'); view([0 90]);
-            shading interp;
-            subplot(2,2,4),trisurf(tri,x,y,topo4); title('hilb'); view([0 90]);
-            shading interp;
+            for i0 = 1:npl
+                subplot(1,npl,i0);
+                trisurf(tri,x,y,Y{i0}); title('max'); view([0 90]);
+                hold on;shading interp;
+            end
         end
 
         
@@ -388,7 +333,7 @@ for t = 1:Nwind
 
             % remove bad comps from MEG
             C(common,:)   = 0;
-            %iW(:,common)  = 0;  
+            iW(:,common)  = 0;  
 
             % MEG Cleaned Comps
             subplot(133),...
@@ -402,10 +347,14 @@ for t = 1:Nwind
             % grab a copy of the BAD components, too
             nc       = size(C,1);
             goodi    = find(~ismember(1:nc,common));
-            badcomp  = C;
+            
+            badcomp          = C;
             badcomp(goodi,:) = 0;
+            badW             = iW;
+            badW(:,goodi)    = 0;
+            
             C(common,:)  = 0;
-            %iW(:,common) = 0;
+            iW(:,common) = 0;
         end
 
         % store
@@ -415,30 +364,27 @@ for t = 1:Nwind
             Data(:,:,Win) = this;
         end
 
-        if t > 50
-            % debugging breakpoint
-            %disp('test');
-        end
-
-
         if plot_change && ~review_topo
             thiscat = reshape(this,[size(this,1),size(this,2)*size(this,3)]);
             timecat = linspace(time(1),time(end)*LWind,size(thiscat,2));
-            subplot(421),imagesc(cD);
-            subplot(422),imagesc(thiscat);
+            subplot(421),imagesc(cD); title('Orig Chan x Time Data');
+            subplot(422),imagesc(thiscat);title('Cleaned Chan x Time Data');
             
             subplot(4,2,[3 4]), plot(timecat,cD     ,'color',[.4 .4 .4]);hold on;
             eplot = TSNorm(e,5)*max(this(:));
             plot(timecat,eplot,'r','LineWidth',3);hold off
+            title('Original Time x Channel Data')'
             
             subplot(4,2,[5 6]), plot(timecat,thiscat,'color',[.4 .4 .4]);hold on;
             plot(timecat,eplot,'r','LineWidth',3);hold off
-            drawnow;
+            title('Cleaned time x Channel Data');
             
-            thebad = (badcomp'*iW')';
+            
+            thebad = (badcomp'*badW')';
             subplot(4,2,[7 8]), plot(timecat,thebad,'color',[.4 .4 .4]);hold on;
-            plot(timecat,mean((bandpassfilter(thebad ,SR,[1 30]))),'b','LineWidth',2)
-            plot(timecat,eplot,'r','LineWidth',2);hold off;
+            plot(timecat,thebad,'b','LineWidth',2)
+            plot(timecat,eplot,'r','LineWidth',0.5);alpha .3; hold off;
+            title('Bad components');
             drawnow;
         end
     
@@ -533,7 +479,21 @@ function [BAD,STR] = threshold(cD,thr_chan,thr_samp,samp_thr,chan_thr,NS,MEGid,t
             end
         end
     end
+end
 
+function funcs = defs
 
+% functions to perform spatial correlations on
+f1 = @(x) max(x')';
+f2 = @(x) min(x')';
+f3 = @(x) PEig(x);
+f4 = @(x) mean(abs(hilbert(x))')';
+
+funcs = {f1 f2 f3 f4};
+end
+
+function dfuncs = defs_d
+
+dfuncs = @(x) real(x);
 
 end
