@@ -373,7 +373,7 @@ for t = 1:Nwind
             subplot(4,2,[3 4]), plot(timecat,cD     ,'color',[.4 .4 .4]);hold on;
             eplot = TSNorm(e,5)*max(this(:));
             plot(timecat,eplot,'r','LineWidth',3);hold off
-            title('Original Time x Channel Data')'
+            title('Original Time x Channel Data');
             
             subplot(4,2,[5 6]), plot(timecat,thiscat,'color',[.4 .4 .4]);hold on;
             plot(timecat,eplot,'r','LineWidth',3);hold off
@@ -382,7 +382,7 @@ for t = 1:Nwind
             
             thebad = (badcomp'*badW')';
             subplot(4,2,[7 8]), plot(timecat,thebad,'color',[.4 .4 .4]);hold on;
-            plot(timecat,thebad,'b','LineWidth',2)
+            plot(timecat,thebad,'b','LineWidth',2);
             plot(timecat,eplot,'r','LineWidth',0.5);alpha .3; hold off;
             title('Bad components');
             drawnow;
