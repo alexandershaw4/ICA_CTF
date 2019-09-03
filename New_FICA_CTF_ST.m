@@ -119,17 +119,19 @@ if prog == wlen
     wlen = wlen - 1;
 end
 
+clear block
 for i  = 1:inf
     i0 = i*prog;
     i1 = i0 + wlen;
     
-    if i1 < NS
+    if i1 < (NS+wlen+1)
         block(i,:) = [i0 i1];
     else
         break
     end
 end
-    
+block = block - wlen   
+
 Nwind = size(block,1);
 
 
@@ -258,7 +260,7 @@ for t = 1:Nwind
         for i0 = 1:npl
             subplot(1,npl,i0);
             trisurf(tri,x,y,Y{i0}); title(char(funcs{i0})); view([0 90]);
-            hold on;shading interp;get(gca,'visible','off');
+            hold on;shading interp;set(gca,'visible','off');
         end
         drawnow;
     end
@@ -376,7 +378,7 @@ end
 fprintf(loc,'Removed an average of %i components per trial\n',round(mean(AllGone)));
 
 % return
-Orig(MEGid,:) = Data / 10^15;
+Orig(MEGid,:)   = Data / 10^15; % fT -> T
 
 % writeCTFds
 [fp,fn,fe] = fileparts(Dname);
