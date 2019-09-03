@@ -3,16 +3,16 @@ cd('/cubric/scratch/sapas10/WAND/Visual/314_09540/');
 
 % Set up config
 %--------------------------------------------------------
-cfg.Dname = '314_09540_Visual.ds';
-cfg.NC    = [];
-cfg.UL    = [];
-cfg.fname = 'ica';
-cfg.bonf  = 0;
-cfg.writelog = 0;
-cfg.window   = 4;
-cfg.overlap  = cfg.window;
-cfg.bpf_data = [1 100];
-cfg.bpf_eogs = [1 100];
+cfg.Dname = '314_09540_Visual.ds'; % name of the raw (unepoiched) CTF ds
+cfg.NC    = 128;             % number of components to look for
+cfg.UL    = [];             % upper limit on num to reject     
+cfg.fname = '_icanew';      % output filename appendix
+cfg.bonf  = 0;              % Bonferonni correct correlations
+cfg.writelog = 0;           % flag: write a logfile or to command window
+cfg.window   = 4;          % length of windows to compute ICA
+cfg.overlap  = cfg.window;  % window overlap (set to len window == no overlap)
+cfg.bpf_data = [1 250];     % bandpass data
+cfg.bpf_eogs = [1 20];     % bandpass EOG / peripheral
 
 % functions to perform spatial correlations on
 %f1 = @(x) max(x')';
@@ -22,9 +22,9 @@ cfg.bpf_eogs = [1 100];
 %funcs = {f1 f2 f3 f4};
 
 funcs = {@(x) sum(PEig(x)')' @(x) mean(abs(hilbert(x))')'};
-
 cfg.funcs  = funcs;
-cfg.dfuncs = {@(x) abs(hilbert(x))};
+
+cfg.dfuncs = {@(x) real(x)  @(x) abs(hilbert(x))};
 
 % Set up plots
 %--------------------------------------------------------

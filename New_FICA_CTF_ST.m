@@ -30,7 +30,7 @@ if ~isfield(cfg,'fname');   fname    = 'ica'; else; fname    = cfg.fname;end
 if ~isfield(cfg,'bonf');    bonf     = 0;     else; bonf     = cfg.bonf; end
 if ~isfield(cfg,'writelog');writelog = 0;     else; writelog = 1;        end
 if ~isfield(cfg,'window');  window   = 20;    else; window   = cfg.window; end
-if ~isfield(cfg,'overlap'); overlap  = window/2; else; overlap = cfg.overlap; end
+if ~isfield(cfg,'overlap'); overlap  = window;else; overlap = cfg.overlap; end
 if ~isfield(cfg,'funcs');   funcs    = defs;  else; funcs    = cfg.funcs;  end
 if ~isfield(cfg,'dfuncs');  dfuncs   = defs_d;  else; dfuncs = cfg.dfuncs; end
 if ~isfield(cfg,'bpf_data');data_bpf = [1 100]; else; data_bpf = cfg.bpf_data;end
@@ -90,6 +90,14 @@ else thrp = .05 / NC;
      fprintf(loc,'Bonferroni correcting...\n');
 end
 
+% compute (1) channel covariance and (2) distances between grads
+grad_i    = strncmp('M',D.grad.label,1) ;
+chan_pos  = D.grad.chanpos(grad_i,:);
+chan_dist = cdist(chan_pos,chan_pos);
+chan_cov  = cov(Data');
+
+
+% time
 t = ((0:D.nSamples)/D.Fs ) - (D.nSamplesPre/D.Fs);
 time = t;
 onset = t(1);
@@ -124,52 +132,64 @@ end
     
 Nwind = size(block,1);
 
+
+Data  = Data * 10^15;                     % convert T to fT
+scale = norm((Data*Data')./size(Data,2)); % scale the data
+scale = sqrt(scale);
+
 % Start loop over trials
 %-------------------------
 for t = 1:Nwind
     clear p_temp p Q
     
-    fprintf(loc,'\n\nAnalysing window %d of %d\n',t,Nwind);
+    fprintf(loc,'\n\n+Analysing window %d of %d\n',t,Nwind);
     Win  = block(t,1):block(t,2);
     
-    cD  = squeeze(Data(:,Win)) * 10^15; % convert T to fT 
+    cD  = squeeze(Data(:,Win)) / scale;  
     e   = E(:,Win);
-   
+        
+    % some descriptives to print for comparison after ica
+    vcD  = var(cD');
+    ivcD = find(vcD==1);
+       
     % do the ica 
     %---------------------------------------------------------------
     
     % bandpass filter
-    fprintf(loc,'Bandpass filtering\n');
+    fprintf(loc,' -Bandpass filtering\n');
     cD = bandpassfilter(cD,SR,data_bpf);
     e  = bandpassfilter(e ,SR,peri_bpf);
     
     % reduce dims of peripheral channels
-    fprintf(loc,'Taking prinipcal component from peripheral (EOG etc) channel matrix\n');
+    fprintf(loc,' -Taking prinipcal component from peripheral (EOG etc) channel matrix\n');
     try
         e = sum( PEig(e') ,2);
     catch
         if t == 1
-            fprintf(loc,['EOG / peripheral channel is too big to do an ' ...
+            fprintf(loc,[' -EOG / peripheral channel is too big to do an ' ...
                 'eigen decomposition\nso using mean channel data instead\n']);
         end
         e = mean(e,1);
         opt.eig = 0;
     end
-    
-    % the ica
+        
     try
-        fprintf(loc,'Trying ICA\n');
+        fprintf(loc,' -Trying ICA\n');
         if nargin < 2 || isempty(NC)
             [C , A , W]   = fastica(cD,'verbose','off');
         else [C , A , W]  = fastica(cD,'numOfIC',NC,'verbose','off');
+        % 'whiteSig',ws,'whiteMat',wm,...
+           %     'dewhiteMat',dwm,
         end
+        fprintf(' -Components in ica: %d\n',size(C,1));
     catch
-        fprintf(loc,'Could not compute ICA: skipping this trial...\n\n');
+        fprintf(loc,' -Could not compute ICA: skipping this trial...\n\n');
         continue;
     end
     
     % temporal correlates of the coomponents
-    for i = 1:size(C,1)
+    p_temp = zeros(size(C,1),1);
+    for i  = 1:size(C,1)
         %c = C  (i,:);
         
         % functions of C
@@ -184,16 +204,20 @@ for t = 1:Nwind
                     p_temp(i) = (p);
                 end
             catch
-                fprintf(loc,'Could not run correlations for component %d\n',i);
+                fprintf(loc,' -Could not run correlations for component %d\n',i);
                 p = [];
             end
         end
     end
     
     try  p_temp; catch p_temp = []; end
+    
+    p_temp(p_temp==0)=1;
+    p_temp = (p_temp < .05);
+    
     if   isempty(p_temp); continue;
-    else fprintf(loc,'Found %d temporally correlated components...\n',length(find(p_temp)));
-         fprintf(loc,'Constructing topographies from these components...\n');
+    else fprintf(loc,' -Found %d temporally correlated components...\n',length(find(p_temp)));
+         fprintf(loc,' -Constructing topographies from these components...\n');
     end
     
     % only include as bad if all periph ncomp correlate
@@ -214,9 +238,15 @@ for t = 1:Nwind
         Y{i0}    = f(TOPO);
         [Q,ps]   = corr(iW,Y{i0});
         p_sp{i0} = find(ps<thrp);
+        %p_all(i0,:) = ps;
     end
     
+    %p_all(p_all==0)=1;
+    %test=p_all*inv(chan_dist.*chan_cov);
+    %p_spat = unique([ find(test(1,:)<.05) find(test(2,:)<.05) ])
+    
     p_spat  = unique(cat(1,p_sp{:}));
+    
     
     if review_spatial
         try thelay; catch; load('ctflay'); end
@@ -239,7 +269,7 @@ for t = 1:Nwind
     
     % log num comps rejected per trial
     if   isempty(common); continue;
-    else fprintf(loc,'A total of %d components correlate both temporally & spatially\n',length(common));
+    else fprintf(loc,' -A total of %d components correlate both temporally & spatially\n',length(common));
     end
     try  AllGone(t,:) = length(common); end
     
@@ -307,7 +337,15 @@ for t = 1:Nwind
     if ~isempty(common)
         this = ( C'*iW')';
        % this = reshape(this,size(cD));
-        Data(:,Win) = this / 10^15; % fT back to T
+        Data(:,Win) = this * scale;
+        
+        % compute post V and nV==0
+        vThis  = var(this');
+        ivThis = find(vThis==1);
+        
+        fprintf('Mean prior variance: %d (%d non-zero)\n',mean(vcD),sum(ivcD));
+        fprintf('Mean post variance: %d (%d non-zero)\n',mean(vThis),sum(ivThis));
+        
     end
     
     if plot_change && ~review_topo
@@ -338,7 +376,7 @@ end
 fprintf(loc,'Removed an average of %i components per trial\n',round(mean(AllGone)));
 
 % return
-Orig(MEGid,:) = Data;
+Orig(MEGid,:) = Data * scale;
 
 % writeCTFds
 [fp,fn,fe] = fileparts(Dname);
@@ -377,6 +415,7 @@ end
 
 
 function funcs = defs
+fprintf('Using default feature functions for spatial correlations\n');
 
 % functions to perform spatial correlations on
 f1 = @(x) max(x')';
@@ -388,7 +427,8 @@ funcs = {f1 f2 f3 f4};
 end
 
 function dfuncs = defs_d
+fprintf('Using default feature functions for temporal correlations\n');
 
-dfuncs = @(x) real(x);
+dfuncs = {@(x) real(x)};
 
 end
