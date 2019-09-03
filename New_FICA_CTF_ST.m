@@ -150,7 +150,7 @@ for t = 1:Nwind
         
     % some descriptives to print for comparison after ica
     vcD  = var(cD');
-    ivcD = find(vcD==1);
+    ivcD = find(vcD~=0);
        
     % do the ica 
     %---------------------------------------------------------------
@@ -257,8 +257,8 @@ for t = 1:Nwind
         
         for i0 = 1:npl
             subplot(1,npl,i0);
-            trisurf(tri,x,y,Y{i0}); title('max'); view([0 90]);
-            hold on;shading interp;
+            trisurf(tri,x,y,Y{i0}); title(char(funcs{i0})); view([0 90]);
+            hold on;shading interp;get(gca,'visible','off');
         end
         drawnow;
     end
@@ -341,10 +341,10 @@ for t = 1:Nwind
         
         % compute post V and nV==0
         vThis  = var(this');
-        ivThis = find(vThis==1);
+        ivThis = find(vThis~=0);
         
-        fprintf('Mean prior variance: %d (%d non-zero)\n',mean(vcD),sum(ivcD));
-        fprintf('Mean post variance: %d (%d non-zero)\n',mean(vThis),sum(ivThis));
+        fprintf(' +Mean prior variance: %d (%d non-zero)\n',mean(vcD),sum(ivcD));
+        fprintf(' +Mean post variance: %d (%d non-zero)\n',mean(vThis),sum(ivThis));
         
     end
     
