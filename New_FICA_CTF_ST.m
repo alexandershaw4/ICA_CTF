@@ -376,7 +376,7 @@ end
 fprintf(loc,'Removed an average of %i components per trial\n',round(mean(AllGone)));
 
 % return
-Orig(MEGid,:) = Data * scale;
+Orig(MEGid,:) = Data / 10^15;
 
 % writeCTFds
 [fp,fn,fe] = fileparts(Dname);
