@@ -130,7 +130,7 @@ for i  = 1:inf
         break
     end
 end
-block = block - wlen   
+block = block - wlen   ;
 
 Nwind = size(block,1);
 
@@ -310,8 +310,31 @@ for t = 1:Nwind
         set(findall(gca, 'type', 'text'), 'visible', 'on');
         
         % remove bad comps from MEG
-        C(common,:)   = 0;
-        iW(:,common)  = 0;
+        %C(common,:)   = 0;
+        %iW(:,common)  = 0;
+        
+            % DO ORTHOG:
+            c_nan = zeros(length(common),1);
+            bad_comps = C(common,:);
+            fprintf(loc,' -Orthogonalising bad comps\n');
+            for or = 1:length(common)
+                c  = C(common(or),:);
+                e  ;
+                
+                o = [c' e] * real(inv([c' e]' * [c' e])^(1/2));
+                o = o(:,1);
+                c = ( o - mean(o) ) + mean(c);
+                C(common(or),:) = c';
+                
+                if any( isnan(c(:)) )
+                    c_nan(or) = 1;
+                end
+            end
+            
+            % report num nan
+            fprintf(' -%d/%d components have nans\n',sum(c_nan),length(common));
+        
+        
         
         % MEG Cleaned Comps
         subplot(133),...
@@ -323,16 +346,38 @@ for t = 1:Nwind
         drawnow;
     else
         % grab a copy of the BAD components, too
-        nc       = size(C,1);
-        goodi    = find(~ismember(1:nc,common));
-        
-        badcomp          = C;
-        badcomp(goodi,:) = 0;
-        badW             = iW;
-        badW(:,goodi)    = 0;
-        
-        C(common,:)  = 0;
-        iW(:,common) = 0;
+         nc       = size(C,1);
+         goodi    = find(~ismember(1:nc,common));
+%         
+         badcomp          = C;
+         badcomp(goodi,:) = 0;
+         badW             = iW;
+         badW(:,goodi)    = 0;
+%         
+%         C(common,:)  = 0;
+%         iW(:,common) = 0;
+
+            % DO ORTHOG:
+            c_nan = zeros(length(common),1);
+            bad_comps = C(common,:);
+            fprintf(loc,' -Orthogonalising bad comps\n');
+            for or = 1:length(common)
+                c  = C(common(or),:);
+                e  ;
+                
+                o = [c' e] * real(inv([c' e]' * [c' e])^(1/2));
+                o = o(:,1);
+                c = ( o - mean(o) ) + mean(c);
+                C(common(or),:) = c';
+                
+                if any( isnan(c(:)) )
+                    c_nan(or) = 1;
+                end
+            end
+            
+            % report num nan
+            fprintf(' -%d/%d components have nans\n',sum(c_nan),length(common));
+
     end
     
     % store
